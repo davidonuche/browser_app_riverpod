@@ -1,97 +1,106 @@
-import 'package:browser_app_riverpod/notifiers/controller_notifier.dart';
 import 'package:browser_app_riverpod/providers.dart';
+import 'package:browser_app_riverpod/widgets/fav_horizontal_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
-import 'widgets/fav_horizontal_list.dart';
-
 class HomePage extends ConsumerWidget {
+  const HomePage({Key? key}) : super(key: key);
+
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final containsFav = ref.watch(containsFavProvider);
-    return Scaffold(
-        appBar: AppBar(
-          actions: [
-            MaterialButton(
-              onPressed: () {
-                final String currentUrl = ref.read(currentUrlProvider);
-                //final bool containsFav = ref.read(containsFavProvider);
-                if (containsFav) {
-                  ref
-                      .read(browserFavouriteProvider.notifier)
-                      .removeFromFavorites(currentUrl);
-                } else {
-                  ref
-                      .read(browserFavouriteProvider.notifier)
-                      .addToFavorites(currentUrl);
-                }
-              },
-              child: Text(containsFav ? "Remove to favs" : "Add to favs"),
-            ),
-          ],
-          bottom: PreferredSize(
-            preferredSize: Size.fromHeight(kToolbarHeight),
-            child: Container(
-              padding: EdgeInsets.all(8),
-              height: 60,
-              child: Row(
-                children: [
-                  Expanded(
-                      child: TextField(
-                    controller: ref.read(textEditingControllerProvider),
-                    // onChanged: (value) {
-                    //   ref.read(currentUrlProvider.notifier).setLink(value);
-                    // },
-                  )),
-                  IconButton(
-                    onPressed: ()  {
-                      //final String currentUrl = ref.read(currentUrlProvider);
-                      final textEditingController =
-                          ref.read(textEditingControllerProvider);
-                      FocusScope.of(context).unfocus();
-                       ref
-                          .read(controllerProvider.notifier)
-                          .goToPage(url: textEditingController.text);
-                      textEditingControllerProvider.clear();
-                      // ref.read(controllerProvider)?.loadUrl(currentUrl);
-                    },
-                    
-
-                    icon: Icon(
-                      Icons.arrow_forward_ios,
-                      size: 30,
-                    ),
-                  ),
-                ],
+    var controller = WebViewController()
+      // ..currentUrl().then(
+      //     (value) => ref.read(currentUrlProvider.notifier).setLink(value!))
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(const Color(0x00000000))
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onProgress: (int progress) {
+            // Update loading bar.
+          },
+          onPageStarted: (String url) {
+            ref.read(currentUrlProvider.notifier).setLink(url);
+          },
+          onPageFinished: (String url) {},
+          onWebResourceError: (WebResourceError error) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text("Error, can not go to ${error.description}"),
               ),
+            );
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            if (request.url.startsWith('https://www.youtube.com/')) {
+              return NavigationDecision.prevent;
+            }
+            return NavigationDecision.navigate;
+          },
+        ),
+      )
+   
+      ..loadRequest(Uri.parse(ref.read(currentUrlProvider)));
+
+    return Scaffold(
+      appBar: AppBar(
+        actions: [
+          MaterialButton(
+            onPressed: () {
+              final String currentUrl = ref.read(currentUrlProvider);
+
+              if (containsFav) {
+                ref
+                    .read(browserFavouriteProvider.notifier)
+                    .removeFromFavorites(currentUrl);
+              } else {
+                ref
+                    .read(browserFavouriteProvider.notifier)
+                    .addToFavorites(currentUrl);
+              }
+            },
+            child: Text(containsFav ? "Remove from favs" : "Add to favs"),
+          ),
+        ],
+        bottom: PreferredSize(
+          preferredSize: const Size.fromHeight(kToolbarHeight),
+          child: Container(
+            padding: const EdgeInsets.all(8),
+            height: 60,
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    autocorrect: false,
+                    controller: ref.read(textEditingControllerProvider),
+                  ),
+                ),
+                IconButton(
+                  onPressed: () {
+                    final textEditingController =
+                        ref.read(textEditingControllerProvider);
+
+                    FocusScope.of(context).unfocus();
+
+                    ref
+                        .read(controllerProvider.notifier)
+                        .goToPage(url: textEditingController.text);
+
+                    textEditingController.clear();
+                  },
+                  icon: const Icon(Icons.arrow_forward_ios, size: 30),
+                ),
+              ],
             ),
           ),
         ),
-        body: Column(
-          children: [
-            if (ref.watch(favsCountProvider) != 0)
-              Expanded(
-                child: WebView(
-                  onWebViewCreated: (webViewController) {
-                    ref
-                        .read(controllerProvider.notifier)
-                        .setController(webViewController);
-                  },
-                  initialUrl: ref.read(currentUrlProvider),
-                  onWebResourceError: (error) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                            "Error, can not go to ${error.failingUrl}"),
-                      ),
-                    );
-                  },
-                  onPageStarted: (link) =>
-                      ref.read(currentUrlProvider.notifier).setLink(link),
-                ),
-              ),
-          ],
-        ));
+      ),
+      body: Column(
+        children: [
+          if (ref.watch(favsCountProvider) != 0) const FavHorizontalList(),
+          Expanded(child: WebViewWidget(controller: controller)),
+        ],
+      ),
+    );
   }
 }
